@@ -1,0 +1,22 @@
+{
+    "name": "pachuli/web",
+    "description": "A framework to builds web",
+    "type": "project",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Pachuli\\Web\\": "src/",
+            "App\\": "app/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Flavio Oria",
+            "email": "flavio.oriap@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "symfony/var-dumper": "7.3.x-dev",
+    }
+}
