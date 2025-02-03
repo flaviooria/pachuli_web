@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Controllers\Profiles;
+namespace App\controllers\profiles;
 
 class ProfilesController
 {

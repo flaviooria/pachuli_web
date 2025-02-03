@@ -1,98 +1,144 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Pachuli\Web\Http;
 
 use Exception;
-use ReflectionMethod;
+use FastRoute\DataGenerator\GroupCountBased;
+use FastRoute\Dispatcher;
+use FastRoute\RouteCollector;
+use FastRoute\RouteParser\Std;
 
 class Router
 {
 
-    protected static array $routes = [];
+    protected array $routes = [];
+    protected RouteCollector $collector;
 
-    public static function get(string $route, mixed $handler = null): void
+    public function __construct()
+    {
+        $this->collector = new RouteCollector(new Std(), new GroupCountBased());
+    }
+
+    public function view(string $nameView): void
+    {
+        $path = str_replace('.', '/', $nameView);
+
+        if ($path === trim($_SERVER['REQUEST_URI'], '/')) {
+
+            $this->addRoute("GET", "/" . $path);
+
+            $viewParts = explode('.', $nameView);
+
+            if (count($viewParts) === 1) {
+                require_once ROOT . "/app/views/$nameView.php";
+            }
+
+            $parentView = ROOT . "/app/views/";
+            foreach ($viewParts as $part) {
+                $parentView .= "$part/";
+            }
+
+            $viewPath = rtrim($parentView, '/');
+            $viewPath .= '.php';
+
+            if (file_exists($viewPath)) {
+                require_once $viewPath;
+            }
+        }
+    }
+
+    public function get(string $route, mixed $handler = null): void
     {
         try {
-            $patternRoute = self::convertRouteToRegex($route);
-
-            self::addRoute($patternRoute, $handler);
+            self::addRoute("GET", $route, $handler);
         } catch (Exception $e) {
             echo $e->getMessage();
             exit;
         }
     }
 
-    /**
-     * @throws Exception if route is not valid
-     */
-    private static function convertRouteToRegex(string $route): string
+    private function addRoute(string $httpMethod, string $route, mixed $handler = null): void
     {
-        $pattern = null;
-
-        // Reemplazar {id?} con (\d+)? para hacerlo opcional
-        if (str_contains($route, '{id?}')) {
-            // Eliminar la barra antes de {id?} y reemplazar {id?} con (?:\/(\d+))?
-            $pattern = preg_replace('/\/\{id\?}/', '(?:\/(?P<id>\d+))?', $route);
-        }
-        // Reemplazar {id} con (\d+) para hacerlo obligatorio
-        elseif (str_contains($route, '{id}')) {
-            $pattern = preg_replace('/\{id}/', '(?P<id>\d+)', $route);
-        }
-
-        if ($pattern) return '#^' . $pattern . '$#';
-
-        throw new Exception('Route not valid');
+        $this->routes[$httpMethod][] = [
+            'route' => $route,
+            'handler' => $handler
+        ];
     }
 
-    private static function addRoute(string $route, mixed $handler = null): void
+    public function post(string $route, mixed $handler = null): void
     {
-
-        self::$routes[$route] = $handler;
+        try {
+            self::addRoute("POST", $route, $handler);
+        } catch (Exception $e) {
+            echo $e->getMessage();
+            exit;
+        }
     }
 
-    public static function dispatcher(): void
+    public function dispatcher(): void
     {
 
-        $url = rtrim($_SERVER['REQUEST_URI'], '/');
+        foreach ($this->routes as $httpMethod => $routeInfo) {
+            foreach ($routeInfo as $route) {
+                $this->collector->addRoute($httpMethod, $route['route'], $route['handler']);
+            }
+        }
 
-        foreach (self::$routes as $pattern => $handler) {
-            if (preg_match($pattern, $url, $matches)) {
+        $dispatcher = new Dispatcher\GroupCountBased($this->collector->processedRoutes());
+        $routeInfo = $dispatcher->dispatch($_SERVER["REQUEST_METHOD"], $_SERVER['REQUEST_URI']);
 
-                $param = $matches['id'] ?? null;
-                $class = $handler[0];
-                $method = $handler[1] ?? null;
-
-                self::handleCallback($class, $method, $param);
+        switch ($routeInfo[0]) {
+            case Dispatcher::NOT_FOUND:
+//                echo 'Error 404: Página no encontrada';
+                http_response_code(404);
+                require_once __DIR__ . '/_404.php';
                 break;
-            }
+            case Dispatcher::METHOD_NOT_ALLOWED:
+//                $allowedMethods = $routeInfo[1];
+                echo 'Error 405: Método no permitido';
+                break;
+            case Dispatcher::FOUND:
+                $handler = $routeInfo[1]; // Callback o controlador
+                $vars = $routeInfo[2]; // Parámetros de la ruta
+                self::handleCallback($handler, $vars);
+                break;
         }
-
-        http_response_code(404);
-        require_once ROOT . "/src/Http/_404.php";
     }
 
-    private static function handleCallback($class, $method, $param = null): void
+    protected static function handleCallback(string|callable|array|null $callable, array $params = []): void
     {
-        if (!is_null($method) && !is_numeric($method)) {
-
-            try {
-                $methodReflection = new ReflectionMethod($class, $method);
-
-                $callables = $methodReflection->isStatic() ? [$class, $method] : [new $class, $method];
-
-                if ($param) {
-                    call_user_func_array($callables, [$param]);
-                    return;
-                }
-
-                call_user_func($callables);
-
-            } catch (\ReflectionException $e) {
-                echo '404';
-                exit;
+        if (is_callable($callable)) {
+            if ($params) {
+                call_user_func_array($callable, $params);
+                return;
             }
 
-
+            call_user_func($callable);
+            return;
         }
+
+        if (is_string($callable)) {
+            require_once ROOT . "/app/views/$callable.php";
+        }
+
+        if (is_array($callable)) {
+            $class = $callable[0];
+            $method = $callable[1];
+            if (!is_null($method) && !is_numeric($method)) {
+                try {
+                    $methodReflection = new \ReflectionMethod($class, $method);
+                    $callables = $methodReflection->isStatic() ? [$class, $method] : [new $class, $method];
+                    if ($params) {
+                        call_user_func_array($callables, $params);
+                        return;
+                    }
+                    call_user_func($callables);
+                } catch (\ReflectionException $e) {
+                    echo '404';
+                    exit;
+                }
+            }
+        }
+
     }
 }
