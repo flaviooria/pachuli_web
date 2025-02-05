@@ -6,7 +6,7 @@ use Exception;
 
 class Config
 {
-    public static array $config;
+    public static array $config = [];
 
     /**
      * Obtiene un array asociativo con la configuración establecida
@@ -15,7 +15,7 @@ class Config
      * de configuración, de otra manera null.
      * @since 0.1.0
      */
-    private static function get(string $key): ?array
+    public static function get(string $key): ?array
     {
         try {
             if (!self::$config) {
@@ -27,6 +27,8 @@ class Config
         } catch (\Exception $e) {
             print($e->getMessage());
         }
+
+        return null;
     }
 
     /**

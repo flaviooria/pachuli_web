@@ -47,6 +47,14 @@ class Router
         }
     }
 
+    private function addRoute(string $httpMethod, string $route, mixed $handler = null): void
+    {
+        $this->routes[$httpMethod][] = [
+            'route' => $route,
+            'handler' => $handler
+        ];
+    }
+
     public function get(string $route, mixed $handler = null): void
     {
         try {
@@ -55,14 +63,6 @@ class Router
             echo $e->getMessage();
             exit;
         }
-    }
-
-    private function addRoute(string $httpMethod, string $route, mixed $handler = null): void
-    {
-        $this->routes[$httpMethod][] = [
-            'route' => $route,
-            'handler' => $handler
-        ];
     }
 
     public function post(string $route, mixed $handler = null): void
@@ -100,12 +100,12 @@ class Router
             case Dispatcher::FOUND:
                 $handler = $routeInfo[1]; // Callback o controlador
                 $vars = $routeInfo[2]; // Parámetros de la ruta
-                self::handleCallback($handler, $vars);
+                $this->handleCallback($handler, $vars);
                 break;
         }
     }
 
-    protected static function handleCallback(string|callable|array|null $callable, array $params = []): void
+    private function handleCallback(string|callable|array|null $callable, array $params = []): void
     {
         if (is_callable($callable)) {
             if ($params) {
@@ -129,10 +129,19 @@ class Router
                     $methodReflection = new \ReflectionMethod($class, $method);
                     $callables = $methodReflection->isStatic() ? [$class, $method] : [new $class, $method];
                     if ($params) {
-                        call_user_func_array($callables, $params);
+                        $response = call_user_func_array($callables, $params);
+
+                        if ($response instanceof Response) {
+                            $response->doShowView();
+                        }
+
                         return;
                     }
-                    call_user_func($callables);
+                    $response = call_user_func($callables);
+
+                    if ($response instanceof Response) {
+                        $response->doShowView();
+                    }
                 } catch (\ReflectionException $e) {
                     echo '404';
                     exit;

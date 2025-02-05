@@ -2,20 +2,18 @@
 
 namespace App\controllers\profiles;
 
-class ProfilesController
+use Pachuli\Web\Http\Controller\AbstractController;
+use Pachuli\Web\Http\Response;
+
+class ProfilesController extends AbstractController
 {
-    public function index(): void
-    {
-        echo 'Profile';
-    }
-
-    public function show(): void
-    {
-        echo 'Show Profile';
-    }
-
     public static function edit(int $id): void
     {
         echo "Edit Profile: $id";
+    }
+
+    public function index(): Response
+    {
+        return $this->render("/profiles/index.php");
     }
 }

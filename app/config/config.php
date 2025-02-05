@@ -5,6 +5,7 @@ return [
         "views" => "views",
         "controllers" => "controllers",
         "config" => "config",
-        "debug" => true
+        "debug" => true,
+        "useTwig" => true,
     ]
 ];
